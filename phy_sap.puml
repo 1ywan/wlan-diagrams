@@ -1,0 +1,48 @@
+@startuml PHY-SAP
+!pragma teoz true
+skinparam MaxMessageSize 200
+TX_MAC -> TX_PHY: PHY-CONFIG.request(PHYCONFIG_VECTOR)
+TX_MAC <-- TX_PHY: PHY-CONFIG.confirm()
+TX_MAC -> TX_PHY: PHY-TXSTART.request(TXVECTOR)
+TX_PHY -> TX_PHY: start local transmit state machine
+activate TX_PHY
+TX_PHY -> TX_PHY: transmit
+TX_PHY ->> RX_PHY: HEADER
+TX_MAC <- TX_PHY: PHY-TXHEADEREND.indication()
+opt TIME_OF_DEPARTURE_REQUESTED=true
+    TX_MAC -> TX_MAC: record the time
+end
+RX_MAC <- RX_PHY: PHY-CCA.indacation(BUSY, IPI-REPORT, channel-list)
+RX_MAC <- RX_PHY: PHY-RXSTART.indication(RXVECTOR)
+TX_PHY -> TX_PHY: check is ready to accept data
+activate TX_PHY
+TX_MAC <- TX_PHY: PHY-TXBUSY.indication(STATE)
+TX_MAC <-- TX_PHY: PHY-TXSTART.confirm(TXSTATUS)
+deactivate TX_PHY
+loop
+    TX_MAC -> TX_PHY: PHY-DATA.request(DATA, USER_INDEX)
+    TX_MAC <-- TX_PHY: PHY-DATA.confirm()
+    TX_PHY -> TX_PHY: transmit()
+    TX_PHY ->> RX_PHY: PKT 
+    RX_PHY -> RX_PHY: receive()
+    activate RX_PHY
+    deactivate RX_PHY
+    ... aRxPHYDelay ...
+    RX_MAC <- RX_PHY: PHY-DATA.indication(DATA)
+end
+TX_MAC -> TX_PHY: PHY-TXEND.request()
+TX_PHY -> TX_PHY: stop transmit state machine
+deactivate TX_PHY
+TX_MAC <-- TX_PHY: PHY-TXEND.confirm()
+RX_PHY -> RX_PHY: receive state machine has completed a reception withour errors.
+RX_MAC <- RX_PHY: PHY-RXEND.indication(RXERROR, RXVECTOR)
+RX_MAC -> RX_MAC: begin inter-frame space processing
+note right: see 10.3.7, 10.22.2.4
+RX_MAC -> RX_PHY: PHY-CCARESET.request(IPI-STATE)
+RX_PHY -> RX_PHY: reset to the state for end of a received frame
+RX_PHY -> RX_PHY: initiate a new CCA evaluation cycle
+opt IPI-STATE=IPI-ON
+    RX_PHY -> RX_PHY: collect IPI values
+end
+RX_MAC <-- RX_PHY: PHY-CCARESET.confirm(IPI-STATE, IPI-REPORT)
+@enduml
